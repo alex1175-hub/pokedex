@@ -32,11 +32,6 @@ const Map<String, String> _itemNames = {
   'whipped-dream': 'Dulce de Nata',
 };
 
-String humanize(String slug) => slug
-    .split('-')
-    .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
-    .join(' ');
-
 String _itemName(String slug) => _itemNames[slug] ?? humanize(slug);
 
 String? _nameOf(dynamic v) => v == null ? null : (v as Map)['name'] as String;
@@ -45,11 +40,15 @@ String? _nameOf(dynamic v) => v == null ? null : (v as Map)['name'] as String;
 class EvolutionStep {
   final String from;
   final String to;
+  final int fromId;
+  final int toId;
   final String requirement;
 
   EvolutionStep({
     required this.from,
     required this.to,
+    required this.fromId,
+    required this.toId,
     required this.requirement,
   });
 }
@@ -59,12 +58,15 @@ List<EvolutionStep> parseEvolutionChain(Map<String, dynamic> json) {
   final steps = <EvolutionStep>[];
 
   void walk(Map<String, dynamic> node) {
-    final from = node['species']['name'] as String;
+    final fromSpecies = node['species'] as Map<String, dynamic>;
     for (final next in node['evolves_to'] as List) {
       final n = next as Map<String, dynamic>;
+      final toSpecies = n['species'] as Map<String, dynamic>;
       steps.add(EvolutionStep(
-        from: from,
-        to: n['species']['name'] as String,
+        from: fromSpecies['name'] as String,
+        to: toSpecies['name'] as String,
+        fromId: idFromUrl(fromSpecies['url'] as String),
+        toId: idFromUrl(toSpecies['url'] as String),
         requirement: _describeDetails(n['evolution_details'] as List),
       ));
       walk(n);
@@ -184,70 +186,4 @@ String _describeOne(Map<String, dynamic> d) {
   if (rel == 0) extras.add('con Ataque = Defensa');
 
   return extras.isEmpty ? base : '$base (${extras.join(', ')})';
-}
-
-/// Región a la que pertenece una Pokédex regional (null si no aplica).
-String? _regionFromPokedex(String pokedex) {
-  const table = {
-    'kanto': 'Kanto',
-    'johto': 'Johto',
-    'hoenn': 'Hoenn',
-    'sinnoh': 'Sinnoh',
-    'unova': 'Teselia',
-    'kalos': 'Kalos',
-    'alola': 'Alola',
-    'melemele': 'Alola',
-    'akala': 'Alola',
-    'ulaula': 'Alola',
-    'poni': 'Alola',
-    'galar': 'Galar',
-    'isle-of-armor': 'Galar',
-    'crown-tundra': 'Galar',
-    'hisui': 'Hisui',
-    'paldea': 'Paldea',
-    'kitakami': 'Paldea',
-    'blueberry': 'Paldea',
-  };
-  for (final e in table.entries) {
-    if (pokedex.contains(e.key)) return e.value;
-  }
-  return null;
-}
-
-/// Datos completos: Pokémon + generación + regiones + cadena evolutiva.
-class PokemonDetails {
-  final Pokemon pokemon;
-  final String generation;
-  final List<String> regions;
-  final List<EvolutionStep> evolutions;
-
-  PokemonDetails({
-    required this.pokemon,
-    required this.generation,
-    required this.regions,
-    required this.evolutions,
-  });
-
-  factory PokemonDetails.from({
-    required Pokemon pokemon,
-    required Map<String, dynamic> species,
-    required Map<String, dynamic> chain,
-  }) {
-    final regions = <String>[];
-    for (final p in species['pokedex_numbers'] as List) {
-      final region = _regionFromPokedex(p['pokedex']['name'] as String);
-      if (region != null && !regions.contains(region)) regions.add(region);
-    }
-
-    final genSlug = (species['generation']['name'] as String)
-        .replaceFirst('generation-', '')
-        .toUpperCase();
-
-    return PokemonDetails(
-      pokemon: pokemon,
-      generation: 'Generación $genSlug',
-      regions: regions,
-      evolutions: parseEvolutionChain(chain),
-    );
-  }
 }
